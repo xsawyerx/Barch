@@ -95,6 +95,14 @@ sub handle_cli {
         exit 0;
     }
 
+    # single volume to backup
+    if ( $opts->{'only'} ) {
+        $opts->{'verbose'} = '1';
+
+        exit_fatal('Invalid volume name')
+            if $opts->{'only'} !~ m/^(\w+|[aA-zZ0-9\-\_\.\+]*)$/;
+    }
+
     return $opts;
 }
 
@@ -223,7 +231,6 @@ my $cv             = AE::cv;
 my $report         = Config::Tiny->read( $reportfile ) || '';
 my $custom         = Config::Tiny->read( $customconf ) || '';
 my $duplcache      = '/root/.cache/duplicity/';
-my $cycle_regex    = '^(\d+)(M|H|D|W)$';
 my $fs_support     = 'ext(2|3|4)|swap|luks|lvm2';
 my $mountablefs    = 'ext(2|3|4)';
 my $cluster_status = 0;
@@ -235,40 +242,18 @@ my @q_order        = ();
 my %fullreport     = ();
 my @exclude_always = ();
 
-sub exit_fatal {
-    my( $msg, $ident ) = @_;
-    $ident = 'Main' if !$ident;
-
-    # write log
-    $logger->log("FATAL: $msg",$ident,'crit') if $msg;
-
-    # cleanup
-    cleanup() and exit 2;
-}
-
-sub parse_period {
-    my $string = shift;
-
-    # validate period syntax
-    $string =~ /$cycle_regex/i;
-    return 'invalid' if( !$1 or !$2 );
-
-    my %table = (
-        M => 60,
-        H => 3600,
-        D => 86400,
-        W => 604800,
-    );
-
-    my $num = $table{ uc $2 }
-        or return 'invalid';
-
-    return int( $1 * $num );
-}
-
 ####################
 # Verification     #
 ####################
+
+if ($graceful) {
+    `touch $stop_file $silent`;
+    $logger->log('Daemon shutdown scheduled immediately after ' .
+           'currently running backups completion');
+
+    exit 0;
+}
+
 # verify required files/dirs exist
 mkdir $lock_dir  if not -e $lock_dir;
 mkdir $mount_dir if not -e $mount_dir;
@@ -287,20 +272,6 @@ if( my $pid = $lockfile->check ){
 if( $cleanup ){
     $verbose = '1';
     cleanup() and exit;
-}
-
-if( $graceful ){
-    `touch $stop_file $silent`;
-    $logger->log('Daemon shutdown scheduled immediately after ' . 
-           'currently running backups completion');
-    exit;
-}
-   
-# single volume to backup
-if( $singleLV ){
-    $verbose = '1';
-    exit_fatal('Invalid volume name')
-        if( $singleLV !~ m/^(\w+|[aA-zZ0-9\-\_\.\+]*)$/ );
 }
 
 # display warning
@@ -1716,6 +1687,37 @@ sub daemonize {
     exit if $pid;
     setsid or die "Can't start a new session: $!";
     umask 0;
+}
+
+sub exit_fatal {
+    my ( $msg ) = @_;
+
+    # write log
+    $logger->log("FATAL: $msg", 'Main','crit');
+
+    # cleanup
+    cleanup() and exit 2;
+}
+
+sub parse_period {
+    my $string      = shift;
+    my $cycle_regex = qr{^(\d+)(M|H|D|W)$}i;
+
+    # validate period syntax
+    $string =~ $cycle_regex;
+    return 'invalid' if( !$1 or !$2 );
+
+    my %table = (
+        M => 60,
+        H => 3600,
+        D => 86400,
+        W => 604800,
+    );
+
+    my $num = $table{ uc $2 }
+        or return 'invalid';
+
+    return int( $1 * $num );
 }
 
 my $http_monitor = Barch::Monitor::HTTP->new(

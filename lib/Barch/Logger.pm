@@ -25,8 +25,8 @@ sub log {
     $msg or return;
 
     # defaults
-    $priority = $priority || "info";
-    $ident    = $ident || 'Main';
+    $priority = $priority || 'info';
+    $ident    = $ident    || 'Main';
     $ident    = "Barch-$ident";
 
     $priority eq 'debug' && $self->debug
