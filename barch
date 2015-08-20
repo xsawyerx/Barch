@@ -291,11 +291,6 @@ $logger->log("[ERR] Invalid chunk transfer time (maxtransfertime)",'Main','err')
     if $trans_wait eq 'invalid';
 
 ####################
-# daemonize        #
-####################
-&daemonize($pwd) if $daemon;
-
-####################
 # Cleanup          #
 ####################
 # remove old lockfiles
@@ -314,6 +309,11 @@ $lockfile->write;
 # if left after crash
 `rm -fr $mount_dir/*`
     if $mount_dir ne '/';
+
+####################
+# daemonize        #
+####################
+&daemonize($pwd) if $daemon;
 
 ####################
 # Subroutines      #
