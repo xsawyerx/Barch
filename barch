@@ -251,11 +251,6 @@ if ($graceful) {
     exit 0;
 }
 
-# verify required files/dirs exist
-mkdir $lock_dir  if not -e $lock_dir;
-mkdir $mount_dir if not -e $mount_dir;
-`touch $reportfile`;
-
 # Create lock file
 my $lockfile = File::Lockfile->new(
     $pidfile, $lock_dir
@@ -264,6 +259,11 @@ my $lockfile = File::Lockfile->new(
 if( my $pid = $lockfile->check ){
     die "Barch is already running with PID: $pid\n";
 }
+
+# verify required files/dirs exist
+mkdir $lock_dir  if not -e $lock_dir;
+mkdir $mount_dir if not -e $mount_dir;
+`touch $reportfile`;
 
 # run cleanup
 if( $cleanup ){
