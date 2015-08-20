@@ -59,18 +59,6 @@ chomp( my $mkdir     = `which mkdir`     ); if( !$mkdir     ){ die "[ERR] No mkd
 $SIG{TERM} = 'sigHandler';
 $SIG{INT}  = 'sigHandler';
 
-# options
-my $verbose ;
-my $cleanup ;
-my $debug   ;
-my $chconfig;
-my $singleLV;
-my $showhelp;
-my $showV   ;
-my $dry_run ;
-my $graceful;
-my $daemon  ;
-
 sub usage {
     print << "_END_USAGE";
 $welcome
@@ -97,18 +85,44 @@ _END_USAGE
     exit 0;
 }
 
-GetOptions(
-    'v|verbose'  => \$verbose,
-    'version'    => \$showV,
-    'h|help'     => \$showhelp,
-    'c|cleanup'  => \$cleanup,
-    'debug'      => \$debug,
-    'o|only=s'   => \$singleLV,
-    'syntax'     => \$chconfig,
-    'dry-run'    => \$dry_run,
-    'graceful'   => \$graceful,
-    'd|daemon'   => \$daemon,
-) || usage( "bad option" );
+sub handle_cli {
+    my $opts = getopt(@ARGV);
+
+    $opts->{'help'} and usage();
+
+    if( $opts->{'version'} ) {
+        print "$welcome\n\n";
+        exit 0;
+    }
+
+    return $opts;
+}
+
+sub getopt {
+    local @ARGV = @_;
+
+    GetOptions(
+        \my %opts,
+        'verbose|v',
+        'version',
+        'help|h',
+        'cleanup|c',
+        'debug',
+        'only|o=s',
+        'syntax',
+        'dry-run',
+        'graceful',
+        'daemon|d',
+    ) || usage( "bad option" );
+
+    return \%opts;
+}
+
+my $opts = handle_cli();
+
+# options
+my ( $verbose, $cleanup, $debug, $singleLV, $dry_run, $graceful, $daemon )
+    = @{$opts}{qw<cleanup debug only dry-run graceful daemon>};
 
 ####################
 # Configuration    #
@@ -119,22 +133,11 @@ my $pref = '_bsnap';
 my $config_reader = Barch::Config->new( configfile => "$pwd/barch.conf" );
 my $conf          = $config_reader->read;
 
-$chconfig and exit 0;
+$opts->{'chconfig'} and exit 0;
 
 ####################
 # Special params   #
 ####################
-# check config
-check_config();
-
-# display help
-usage() if $showhelp;
-
-# show version
-if( $showV ){
-    print "$welcome\n\n";
-    exit 0;
-}
 
 # Global config
 my $logfacility = $conf->{global}{facility} || 'deamon';
@@ -213,8 +216,7 @@ my $logger = Barch::Logger->new(
 # Variables        #
 ####################
 # DEBUG parameters
-my $silent      = ' 1>/dev/null 2>/dev/null';
-   $silent      = '' if $debug;
+my $silent = $debug ? '' : ' 1>/dev/null 2>/dev/null';
 
 # Global variables
 my $cv             = AE::cv;
