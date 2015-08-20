@@ -15,7 +15,6 @@ use warnings;
 BEGIN { $ENV{'PERL_ANYEVENT_MODEL'} = 'Perl' }
 
 use JSON;
-use Switch; ## no critic FIXME
 use AnyEvent;
 use XML::Simple;
 use Time::Piece;
@@ -252,13 +251,17 @@ sub parse_period {
     $string =~ /$cycle_regex/i;
     return 'invalid' if( !$1 or !$2 );
 
-    switch( uc($2) ){
-        case 'M' { return int( $1 * 60     ) }
-        case 'H' { return int( $1 * 3600   ) }
-        case 'D' { return int( $1 * 86400  ) }
-        case 'W' { return int( $1 * 604800 ) }
-    }
-    return 'invalid';
+    my %table = (
+        M => 60,
+        H => 3600,
+        D => 86400,
+        W => 604800,
+    );
+
+    my $num = $table{ uc $2 }
+        or return 'invalid';
+
+    return int( $1 * $num );
 }
 
 ####################
@@ -752,23 +755,21 @@ sub discover {
     $hash{'fstype'} = fs_type(%hash);
 
     # handle exceptions
-    switch( $hash{'fstype'} ){
-        case 'unknown' {
+    for ( $hash{'fstype'} ) {
+        if ( /^unknown$/ ) {
             $hash{'status'} = "Failed to recognize file system on $hash{'blkdev'}";
-            $hash{'code'} = 2;
-        }
-        case /$skip_always/ {
+            $hash{'code'}   = 2;
+        } elsif ( /$skip_always/ ) {
             $hash{'status'} = "$hash{'blkdev'} contains $hash{'fstype'}. Skip";
-            $hash{'code'} = 4;
-        }
-        case 'lvm2' {
-            if( $backup_lvm ne 'true' ){
+            $hash{'code'}   = 4;
+        } elsif ( /^lvm2$/ ) {
+            if ( $backup_lvm ne 'true' ) {
                 $hash{'status'} = "$hash{'blkdev'} contains LVM. backup_lvm flag is not 'true'";
-                $hash{'code'} = 4;
-        }}
-        case 'swap' {
+                $hash{'code'}   = 4;
+            }
+        } elsif ( /^swap$/ ) {
             $hash{'status'} = "$hash{'blkdev'} contains swap. Skip";
-            $hash{'code'} = 4;
+            $hash{'code'}   = 4;
         }
     }
 
@@ -1161,22 +1162,22 @@ sub backup {
             $locked = is_locked_HTTP( %hash );
         }
 
-        switch( $locked ){
-            case 'locked' { 
-                $hash{'code'} = 4;
+        for ( $locked ) {
+            if ( /^locked$/ ) {
                 $hash{'status'} = "Volume is locked by other instance";
+                $hash{'code'}   = 4;
 
                 $logger->log($hash{'status'}, $hash{'lvname'}, 'warning');
                 return %hash;
-            }
-            case 'error' {
+            } elsif ( /^error$/ ) {
                 $hash{'status'} = "Remote cluster member is unreachable";
-                $hash{'code'} = 4;
+                $hash{'code'}   = 4;
 
-                if( lc($member_err) eq 'abort' ){
+                if ( lc($member_err) eq 'abort' ) {
                     $hash{'code'} = 2;
                     return %hash;
-            }}
+                }
+            }
         }
 
         # create lock file
